@@ -17,7 +17,6 @@ def main():
     voc = trainer.train(part_img_paths)
     bow_extractor = BOWDescriptor(feature_extractor, voc)
     histo_list = None
-
     for path in img_paths[:4]:
         img = cv.imread(str(path))
         img = cv.pyrDown(img)
@@ -30,13 +29,13 @@ def main():
                 histo_list = histo
             else:
                 histo_list = np.append(histo_list, histo, axis=0)
-
-
+    #histo_list = histo_list.reshape((histo_list.shape[0], histo_list.shape[1], 1))
     label_list = np.asarray([1]*histo_list.shape[0], dtype=np.int32)
-    histo_list = histo_list.transpose()
+    #histo_list = histo_list.transpose()
     print(label_list)
     print(histo_list)
     print(histo_list.shape)
+    label_list = label_list.reshape((72, 1))
     #label_list = cv.UMat(label_list)
     classifier = BOWClassifier()
     classifier.train(histo_list, label_list)
@@ -130,7 +129,7 @@ class BOWDescriptor:
 
     def compute(self, query_ds):
         matches = self.matcher.match(query_ds)
-        histogramm = np.zeros((1, self.clusters), np.uint32)
+        histogramm = np.zeros((1, self.clusters), dtype=np.float32)
         for x in matches:
             print(len(self.matcher.getTrainDescriptors()))
             print(f'distance: {x.distance} imgid: {x.imgIdx} queryid: {x.queryIdx} trainid: {x.trainIdx}')
@@ -155,7 +154,7 @@ class BOWClassifier:
     def train(self, histo_list, labels):
         print(labels)
         print(labels.shape)
-        self.svm.trainAuto(histo_list, cv.ml.COL_SAMPLE, labels)
+        self.svm.trainAuto(histo_list, cv.ml.ROW_SAMPLE, labels)
         self.svm.save('svm')
         print('fertig')
 
