@@ -8,13 +8,15 @@ from threading import Lock
 from time import sleep
 
 img_folder = 'C:\\Users\\Alex\\IdeaProjects\\grain-swpt\\dataset\\corn\\'
+neg_folder = 'C:\\Users\\Alex\\IdeaProjects\\grain-swpt\\dataset\\corn\\'
 
 def main():
     feature_extractor = cv.AKAZE_create(cv.AKAZE_DESCRIPTOR_KAZE)
     img_paths = list(Path(img_folder).glob('*.JPG'))
     part_img_paths = img_paths[:4]
-    trainer = BOWTrainer(feature_extractor, clusters=20, threads=4)
-    voc = trainer.train(part_img_paths)
+    trainer = BOWTrainer(feature_extractor, clusters=40, threads=4)
+    neg_paths = [path for path in Path(neg_folder).iterdir()]
+    voc = trainer.train(part_img_paths, neg_paths[0:1])
     bow_extractor = BOWDescriptor(feature_extractor, voc)
     histo_list = None
     for path in img_paths[:4]:
@@ -30,7 +32,8 @@ def main():
             else:
                 histo_list = np.append(histo_list, histo, axis=0)
     #histo_list = histo_list.reshape((histo_list.shape[0], histo_list.shape[1], 1))
-    label_list = np.asarray([1]*histo_list.shape[0], dtype=np.int32)
+    label_list = np.asarray([1]*(histo_list.shape[0]), dtype=np.int32)
+    label_list[:5] = -1
     #histo_list = histo_list.transpose()
     print(label_list)
     print(histo_list)
@@ -39,6 +42,18 @@ def main():
     #label_list = cv.UMat(label_list)
     classifier = BOWClassifier()
     classifier.train(histo_list, label_list)
+
+def compute_neg():
+    neg_imgs = Path(neg_folder).iterdir()
+    img_path = next(neg_imgs)
+    neg_img = cv.imread(str(img_path))
+
+    window_size = (200, 200)
+    window_stride = (100, 100)
+    mask = np.zeros((neg_img.shape[0], neg_img.shape[1], 1), dtype=np.uint8)
+    if neg_img.shape[:1] >= 200:
+        strides_x = (neg_img.shape[1] - 200) / window_stride[0]
+
 
 
 
@@ -84,10 +99,10 @@ class BOWTrainer:
         self.bow_lock = Lock()
         self.finish_counter = 0
 
-    def train(self, img_paths: List):
-        print(img_paths)
+    def train(self, img_paths: List, neg_paths: List):
         self.img_paths = img_paths
         print(self.img_paths)
+        self._train_neg_img(neg_paths[0])
         for x in range(self.initial_tasks):
             self._create_quest()
         while self.finish_counter < self.initial_tasks:
@@ -111,6 +126,14 @@ class BOWTrainer:
             kp, ds = detect_roi(img, mask, points, self.ft_extractor)
             with self.bow_lock:
                 self.bow_trainer.add(ds)
+
+    def _train_neg_img(self, path):
+        print(str(path))
+        img = cv.imread(str(path))
+        img = cv.pyrDown(img)
+        kp, ds = self.ft_extractor.detectAndCompute(img, None)
+        with self.bow_lock:
+            self.bow_trainer.add(ds)
 
     def _create_quest(self):
         print(self.img_paths)
@@ -147,6 +170,7 @@ class BOWDescriptor:
         return self.compute(ds)
 
 
+
 class BOWClassifier:
     def __init__(self):
         self.svm = cv.ml.SVM_create()
@@ -155,6 +179,7 @@ class BOWClassifier:
         print(labels)
         print(labels.shape)
         self.svm.trainAuto(histo_list, cv.ml.ROW_SAMPLE, labels)
+        #self.svm.
         self.svm.save('svm')
         print('fertig')
 
