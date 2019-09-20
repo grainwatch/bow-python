@@ -1,11 +1,14 @@
 import cv2 as cv
 import numpy as np
+import matplotlib.pyplot as plt
+
 import json
 from typing import List
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
 from time import sleep
+
 
 img_folder = 'C:\\Users\\Alex\\IdeaProjects\\grain-swpt\\dataset\\corn\\'
 neg_folder = 'C:\\Users\\Alex\\IdeaProjects\\grain-swpt\\dataset\\corn\\'
@@ -16,7 +19,7 @@ def main():
     img_paths = list(map(lambda x: str(x), Path(img_folder).glob('*.JPG')))
     print(img_paths)
     part_img_paths = img_paths[:4]
-    trainer = BOWTrainer(feature_extractor, clusters=50, threads=4)
+    trainer = BOWTrainer(feature_extractor, clusters=200, threads=4)
     voc = trainer.train(part_img_paths)
     bow_extractor = BOWDescriptor(feature_extractor, voc)
     print("im heare")
@@ -41,6 +44,7 @@ def main():
             #print(roi_fts)
             histogram = bow_extractor.match(roi_fts[1])
             histogram_list.append(histogram)
+            #plot_histogram(histogram)
             print(histogram)
         imgs_rois_fts[path] = (img_roi_kps, img_roi_dss)
     classifier = BOWClassifier()
@@ -81,6 +85,11 @@ def main():
     classifier = BOWClassifier()
     classifier.train(histo_list, label_list)"""
 
+def plot_histogram(histogram):
+    print(f'clusters: ${histogram.shape}')
+    x = [i for i in range(histogram.shape[0])]
+    plt.bar(x, histogram)
+    plt.show()
 
 
 def test_roi(img, points, ft):
