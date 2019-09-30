@@ -40,6 +40,14 @@ class TestDataset(unittest.TestCase):
         result = dataset.is_roi_colliding(roi_to_check, rois)
         self.assertFalse(result)
 
+    def test_is_roi_colliding_false_2(self):
+        roi_to_check = (5, 5, 100, 100)
+        rois = [
+            (105, 105, 100, 100)
+        ]
+        result = dataset.is_roi_colliding(roi_to_check, rois)
+        self.assertFalse(result)
+
     def test_is_roi_colliding_true_1(self):
         roi_to_check = (50, 50, 100, 100)
         rois = [
@@ -112,7 +120,13 @@ class TestDataset(unittest.TestCase):
         result = dataset.is_roi_colliding(roi_to_check, rois)
         self.assertTrue(result)
 
-
+    def test_is_roi_colliding_true_10(self):
+        roi_to_check = (5, 5, 100, 100)
+        rois = [
+            (5, 15, 100, 100)
+        ]
+        result = dataset.is_roi_colliding(roi_to_check, rois)
+        self.assertTrue(result)
 
     def test_rois_from_json(self):
         jsonpath = Path('C:\\Users\\Alex\\CodeProjects\\bow-python\\test\\dataset\\test.json')

@@ -282,26 +282,40 @@ def _negative_samples_from_img(img: np.ndarray, rois: List[Rectangle]=None, wind
     width, height = window_size
     stride_x, stride_y = stride
     x, y = 0, 0
+    visual = img
     while y + height < img.shape[0]:
         if x + width > img.shape[1]:
             x = 0
             y += stride_y
             continue #skip loop iteration to check y condition
-        if not is_roi_colliding((x, y, width, height), rois):
-            roi_img = img[y:y+height, x:x+width]
+        roi_img = img[y:y+height, x:x+width]
+        print(f'roi: {x, y}')
+        if not is_roi_colliding((x, y, width, height), rois, img):
+            print('not colliding')
             roi_img_list.append(roi_img)
+        else:
+            print('colliding')
         x += stride_x
     return roi_img_list
 
 #TESTED
-def is_roi_colliding(roi_to_check: Rectangle, rois: List[Rectangle]):
+def is_roi_colliding(roi_to_check: Rectangle, rois: List[Rectangle], img: np.ndarray=None):
+    x_check, y_check, width_check, height_check = roi_to_check
+    #visual = cv.rectangle(img, (x_check, y_check), (x_check+width_check, y_check+height_check), (255, 0, 0))
     for roi in rois:
         x, y, width, height = roi
-        x_check, y_check, width_check, height_check = roi_to_check
-        x_condition = (x_check > x and x_check < x + width) or (x_check + width_check > x and x_check + width_check < x + width) or (x_check < x and x_check + width_check > x + width)
-        y_condition = (y_check > y and y_check < y + height) or (y_check + height_check > y and y_check + height_check < y + height) or (y_check < y and y_check + height_check > y + height)
+        x_condition = (x_check >= x and x_check < x + width) or (x_check + width_check > x and x_check + width_check <= x + width) or (x_check <= x and x_check + width_check >= x + width)
+        y_condition = (y_check >= y and y_check < y + height) or (y_check + height_check > y and y_check + height_check <= y + height) or (y_check <= y and y_check + height_check >= y + height)
         if x_condition and y_condition:
+            #if img is not None:
+                #visual = cv.rectangle(visual, (x, y), (x+width, y+height), (0, 255, 0))
+                #cv.imshow('', visual)
+                #cv.waitKey(0)
             return True
+        #visual = cv.drawText()
+        #visual = cv.rectangle(visual, (x, y), (x+width, y+height), (0, 0, 255))
+    #cv.imshow('', visual)
+    #cv.waitKey(0)
     return False
 
 #TESTED
