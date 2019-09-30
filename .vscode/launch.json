@@ -10,6 +10,40 @@
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal"
+        },
+        {
+            "name": "Python: Launch split_img.py",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/split_img.py",
+            "args": [
+                "C:\\Users\\Alex\\Desktop\\Bilder_Korner_original_20180411\\mais\\DSC_0922.JPG",
+                "${workspaceFolder}\\dataset_splits",
+                "-s 32",
+                "-z 0.3"
+            ]
+        },
+        {
+            "name": "Python: Launch obj_test.py",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/obj_test.py",
+            "args": [
+                "C:\\Users\\Alex\\Desktop\\Bilder_Korner_original_20180411\\mais\\DSC_0922.JPG",
+                "${workspaceFolder}\\dataset_splits",
+                "-z 0.3"
+            ]
+        },
+        {
+            "name": "Python: Launch compare_split_vs_view.py",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/compare_split_vs_view.py",
+            "args": [
+                "C:\\Users\\Alex\\Desktop\\Bilder_Korner_original_20180411\\mais\\DSC_0922.JPG",
+                "${workspaceFolder}\\dataset_splits",
+                "-z 0.3"
+            ]
         }
     ]
 }

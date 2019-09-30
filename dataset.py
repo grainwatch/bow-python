@@ -1,4 +1,4 @@
-from typing import Tuple, List
+from typing import Tuple, List, Dict
 from numpy import ndarray
 from pathlib import Path
 import json
@@ -8,6 +8,8 @@ import random
 import math
 
 Data = Tuple[List[ndarray], List[str]]
+Position = Tuple[int, int]
+Size = Position
 
 label_to_id = {'negative': -1, 'corn': 1, 'rye': 2, 'triticale': 3, 'wheat': 4}
 
@@ -54,22 +56,6 @@ def _read_imgs(data_path, boundary):
     return x
             
 
-
-def load_2_class(data_pathname:str, class1: int, class2: int) -> Tuple[List[ndarray], List[str]]:
-    data_path = Path(data_pathname)
-    labels_path = data_path.joinpath('labels.csv')
-    csvfile = labels_path.open()
-    reader = csv.reader(csvfile, quoting=csv.QUOTE_NONNUMERIC)
-    y = next(reader)
-    img_ids = [(i, class_id) for i, class_id in enumerate(y) if class_id == class1 or class_id == class2]
-    y = []
-    x = []
-    for i, class_id in img_ids:
-        y.append(class_id)
-        img_path = data_path.joinpath(f'{i}.jpg')
-        x.append(cv.imread(str(img_path)))
-    return x, y
-
 def shuffle(x: List[np.ndarray], y: List[int]):
     xy = list(zip(x, y))
     random.shuffle(xy)
@@ -92,21 +78,6 @@ def filter_data(train, test, classes):
             del test_y[i]
         else:
             i += 1
-    print(train_y)
-    print(test_y)
-    """train_xy = list(zip(train[0], train[1]))
-    test_xy = list(zip(test[0], test[1]))
-    filter(lambda x: x[1] in classes, train_xy)
-    i = 0
-    while i < len(train_xy):
-        if train_xy[i][1] not in classes:
-            del train_xy[i]
-        i += 1
-    print(test_xy)
-    train_x, train_y = zip(*train_xy)
-    test_x, test_y = zip(*test_xy)
-    print(train_y)
-    print(test_y)"""
     return (train_x, train_y), (test_x, test_y)
 
 def _in_class_list(classes, xy):
@@ -205,9 +176,182 @@ def _create_negative_examples(img_pathname: str, negative_foldername: str, dst_p
     upper_boundary = img_counter - 1
     return under_boundary, upper_boundary
 
-        
+### VERSION 2 ###
+
+def create_data_2(img_pathname: str, label_pathname: str, negative_foldername: str, dst_pathname: str='.', test_amount: float=0, scale: float=1.0, window_size: Tuple[int, int]=(100, 100)):
+    dst_path = Path(dst_pathname)
+    dst_path.mkdir(exist_ok=True)
+    train_path = dst_path.joinpath('train')
+    test_path = dst_path.joinpath('test')
+    train_path.mkdir(exist_ok=True)
+    test_path.mkdir(exist_ok=True)
+    negative_samples = []
+    for label_classdir in Path(label_pathname).iterdir():
+        img_classdir = Path(img_pathname).joinpath(ENG_TO_GER[label_classdir.name])
+        if img_classdir.exists():
+            samples = _create_class_samples(img_classdir, label_classdir, scale, window_size)
+            negative_samples += _create_negative_samples_from_class(img_classdir, label_classdir, scale, window_size)
+            train_samples, test_samples = _split_samples(samples, test_amount)
+            class_train_path = train_path.joinpath(label_classdir.name)
+            class_train_path.mkdir(exist_ok=True)
+            class_test_path = test_path.joinpath(label_classdir.name)
+            class_test_path.mkdir(exist_ok=True)
+            _write_samples(train_samples, class_train_path)
+            _write_samples(test_samples, class_test_path)
+    negativetrain_path = train_path.joinpath('negative')
+    negativetrain_path.mkdir(exist_ok=True)
+    negativetest_path = test_path.joinpath('negative')
+    negativetest_path.mkdir(exist_ok=True)
+    negativetrain_samples, negativetest_samples = _split_samples(negative_samples, test_amount)
+    _write_samples(negativetrain_samples, negativetrain_path)
+    _write_samples(negativetest_samples, negativetest_path)
+    
+
+def _write_samples(samples: List[np.ndarray], dstpath: Path):
+    i = 0
+    for sample in samples:
+        samplepath = dstpath.joinpath(f'{i}.jpg')
+        cv.imwrite(str(samplepath), sample)
+        i += 1
+
+#TESTED
+def _split_samples(samples: List[np.ndarray], test_amount: float) -> Tuple[List[np.ndarray], List[np.ndarray]]:
+    train_amount =  math.floor((1 - test_amount) * len(samples))
+    train_samples = samples[:train_amount]
+    test_samples = samples[train_amount:]
+    return train_samples, test_samples
+
+def _create_class_samples(classimg_path: Path, labelfolder_path: Path, scale: float, window_size: Tuple[int, int]) -> List[np.ndarray]:
+    samples = []
+    window_dict = _load_labels_from_path(list(labelfolder_path.glob('*.json')), window_size)
+    imgpaths = list(classimg_path.iterdir())
+    imgpaths = list(filter(lambda imgpath: _name_from_path(imgpath) in window_dict, imgpaths))
+    labels = list(map(lambda imgpath: window_dict[_name_from_path(imgpath)], imgpaths))
+    imgs = _load_imgs_from_path(imgpaths, scale)
+    for img, label in zip(imgs, labels):
+        samples += _samples_from_img(img, label)
+    return samples
+
+def _create_negative_samples_from_class(classimg_path: Path, labelfolder_path: Path, scale: float, window_size: Tuple[int, int]) -> List[np.ndarray]:
+    samples = []
+    labelpaths = list(labelfolder_path.glob('*.json'))
+    roi_dict = _load_labels_from_path(labelpaths)
+    imgpaths = list(classimg_path.glob('*.jpg'))
+    imgpaths = list(filter(lambda imgpath: _name_from_path(imgpath) in roi_dict, imgpaths))
+    labels = list(map(lambda imgpath: roi_dict[_name_from_path(imgpath)], imgpaths))
+    imgs = _load_imgs_from_path(imgpaths, scale)
+    for img, label in zip(imgs, labels):
+        samples += _negative_samples_from_img(img, label)
+    return samples
+
+    
+Rectangle = Tuple[int, int, int, int]
+
+def _load_labels_from_path(labelpaths: List[Path], window_size: Tuple[int, int]=None) -> Dict[str, List[Rectangle]]:
+    window_dict = {}
+    for labelpath in labelpaths:
+        labelname = _name_from_path(labelpath)
+        rois = _rois_from_json(labelpath)
+        rois = map(lambda roi: _scale_rectangle(roi, scale), rois)
+        if window_size is not None:
+            rois = map(lambda roi: _rectangle_to_window(roi, window_size), rois)
+        window_dict[labelname] = list(rois)
+    return window_dict
+
+#TESTED
+def _name_from_path(path: Path) -> str:
+    return path.name[:path.name.index('.')]
+
+def _load_imgs_from_path(imgpaths: List[Path], scale: float=1.0):
+    imgs = map(lambda imgpath: cv.imread(str(imgpath)), imgpaths)
+    if scale != 1.0:
+        imgs = map(lambda img: cv.resize(img, (0, 0), None, scale, scale), imgs)
+    return list(imgs)
+
+#TESTED
+def _samples_from_img(img: np.ndarray, rois: List[Rectangle]) -> List[np.ndarray]:
+    samples = []
+    for roi in rois:
+        x, y, width, height = roi
+        roi_img = img[y:y+height, x:x+width]
+        samples.append(roi_img)
+    return samples
+
+def _negative_samples_from_img(img: np.ndarray, rois: List[Rectangle]=None, window_size: Tuple[int, int]=(128, 128), stride: Tuple[int, int]=(64, 64)):
+    roi_img_list = []
+    width, height = window_size
+    stride_x, stride_y = stride
+    x, y = 0, 0
+    while y + height < img.shape[0]:
+        if x + width > img.shape[1]:
+            x = 0
+            y += stride_y
+            continue #skip loop iteration to check y condition
+        if not is_roi_colliding((x, y, width, height), rois):
+            roi_img = img[y:y+height, x:x+width]
+            roi_img_list.append(roi_img)
+        x += stride_x
+    return roi_img_list
+
+#TESTED
+def is_roi_colliding(roi_to_check: Rectangle, rois: List[Rectangle]):
+    for roi in rois:
+        x, y, width, height = roi
+        x_check, y_check, width_check, height_check = roi_to_check
+        x_condition = (x_check > x and x_check < x + width) or (x_check + width_check > x and x_check + width_check < x + width) or (x_check < x and x_check + width_check > x + width)
+        y_condition = (y_check > y and y_check < y + height) or (y_check + height_check > y and y_check + height_check < y + height) or (y_check < y and y_check + height_check > y + height)
+        if x_condition and y_condition:
+            return True
+    return False
+
+#TESTED
+def _rois_from_json(jsonpath: Path):
+    rois = []
+    with jsonpath.open() as jsonfile:
+        labeljson_dict = json.load(jsonfile)
+        labels = labeljson_dict['shapes']
+        for roi_label in labels:
+            points = roi_label['points']
+            rectangle = _rectangle_from_points(points)
+            rois.append(rectangle)
+    return rois
+
+#TESTED
+def _rectangle_from_points(points):
+    x = [0, 0]
+    y = [0, 0]
+    if points[0][0] < points[1][0]:
+        x[0] = points[0][0]
+        x[1] = points[1][0]
+    else:
+        x[0] = points[1][0]
+        x[1] = points[0][0]
+    if points[0][1] < points[1][1]:
+        y[0] = points[0][1]
+        y[1] = points[1][1]
+    else:
+        y[0] = points[1][1]
+        y[1] = points[0][1]
+    width = x[1] - x[0]
+    height = y[1] - y[0]
+    return x[0], y[0], width, height
+
+#TESTED
+def _scale_rectangle(roi: Rectangle, scale: float) -> Rectangle:
+    return tuple(map(lambda p: int(p*scale), roi))
+
+#TESTED
+def _rectangle_to_window(roi: Rectangle, window_size: Tuple[int, int]) -> Rectangle:
+    x, y, width, height = roi
+    win_width, win_height = window_size
+    center_x = x + width/2
+    center_y = y + height/2
+    win_x = int(center_x - win_width/2)
+    win_y = int(center_y - win_height/2)
+    return (win_x, win_y, win_width, win_height)
 
 
+### OLD ###
 
 def calc_roi(points, window_size, scale, img_shape):
     x = [0, 0]
@@ -263,14 +407,43 @@ def get_biggest_label(label_pathname: str):
                     size = label_height
     return size                   
 
+def split_img_in_windows(img: np.ndarray, window_size: Size, window_stride: Size) -> Tuple[List[np.ndarray], List[Position]]:
+    imgs = []
+    img_pos_list = []
+    window_pos = [0, 0]
+    while window_pos[1] + window_size[1] < img.shape[0]:
+        roi = img[window_pos[1]:window_pos[1]+window_size[1], window_pos[0]:window_pos[0]+window_size[0]]
+        imgs.append(roi)
+        img_pos_list.append(tuple(window_pos.copy()))
+        window_pos[0] += window_stride[0]
+        if window_pos[0] + window_size[0] > img.shape[1]:
+            window_pos[0] = 0
+            window_pos[1] += window_stride[1]
+    return imgs, img_pos_list
+
+def save_img_splits(dst_folder: str, imgs: List[np.ndarray], img_pos_list: List[Position]):
+    assert len(imgs) == len(img_pos_list)
+    pos_file_dict = {}
+    dst_folderpath = Path(dst_folder)
+    
+    dst_folderpath.mkdir(exist_ok=True)
+    for i in range(len(imgs)):
+        img = imgs[i]
+        split_filename = str(dst_folderpath.joinpath(f'{i}.jpg'))
+        pos_file_dict[i] = img_pos_list[i]
+        result = cv.imwrite(split_filename, img)
+    with dst_folderpath.joinpath('windows.json').open(mode='w') as jsonfile:
+        json.dump(pos_file_dict, jsonfile)
+
+
 
 if __name__ == '__main__':
     size = get_biggest_label('C:/Users/Alex/IdeaProjects/grain-swpt/dataset')
     scale = 128 / size
     print(scale)
-    #create_data('C:/Users/Alex/Desktop/Bilder_Korner_original_20180411', 'C:/Users/Alex/IdeaProjects/grain-swpt/dataset', 'mehl', 'dataset', 0.2, scale, (128, 128))
-    (train_x, train_y), (test_x, test_y) = load_data_json('dataset')
-    print(train_x, train_y, test_x, test_y)
+    create_data_2('C:/Users/Alex/Desktop/Bilder_Korner_original_20180411', 'C:/Users/Alex/IdeaProjects/grain-swpt/dataset', 'mehl', 'dataset_v2', 0.2, scale, (128, 128))
+    """(train_x, train_y), (test_x, test_y) = load_data_json('dataset')
+    print(train_x, train_y, test_x, test_y)"""
     #x, y = load_data('./dataset')
     #x, y = load_2_class('dataset', 0, 1)
     #print(x, y)
