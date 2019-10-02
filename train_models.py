@@ -1,5 +1,6 @@
 import dataset
 import model
+import cv2 as cv
 
 def _train_ft_matcher(train_x, train_y):
     ftmodel = model.FeatureMatcher()
@@ -17,9 +18,12 @@ def _train_hog(train_x, train_y):
     return hogmodel
 
 if __name__ == '__main__':
-    train, test = dataset.load_data_json('C:/Users/Alex/CodeProjects/bow-python/dataset')
-    (train_x, train_y), (test_x, test_y) = dataset.filter_data(train, test, [-1, 1])
+    (train_x, train_y), (test_x, test_y) = dataset.load_data_2('C:/Users/Alex/CodeProjects/bow-python/dataset_v2')
+    #(train_x, train_y), (test_x, test_y) = dataset.filter_data(train, test, [-1, 1])
     train_x, train_y = dataset.shuffle(train_x, train_y)
+    for x in train_x[:10]:
+        cv.imshow('', x)
+        cv.waitKey(0)
     ftmodel = _train_ft_matcher(train_x, train_y)
     bowmodel = _train_bow(train_x, train_y)
     hogmodel = _train_hog(train_x, train_y)

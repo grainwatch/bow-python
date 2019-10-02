@@ -54,6 +54,16 @@
             "args": [
                 "TestDataset.test_negative_samples_from_imgs",
             ]
+        },
+        {
+            "name": "Python: Change image paths",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/imgpath-remover.py",
+            "args": [
+                "C:\\Users\\Alex\\IdeaProjects\\grain-swpt\\dataset2\\corn",
+                "C:\\Users\\Alex\\Desktop\\Bilder_Korner_original_20180411\\mais"
+            ]
         }
     ]
 }

@@ -198,21 +198,21 @@ class ObjectDetector:
         while win_pos[1] + self.win_size[1] < x.shape[0]:
             roi = x[win_pos[1]:win_pos[1]+self.win_size[1], win_pos[0]:win_pos[0]+self.win_size[0]]
             roi_list.append(roi)
-            print(self.detect_model.predict([roi]))
+            """print(self.detect_model.predict([roi]))
             cv.imshow('', roi)
-            cv.waitKey(0)
+            cv.waitKey(0)"""
             roi_pos_list.append(win_pos.copy())
             win_pos[0] += self.win_stride[0]
             if win_pos[0] + self.win_size[0] > x.shape[1]:
                 win_pos[0] = 0
                 win_pos[1] += self.win_stride[1]
-        """response = self.detect_model.predict(roi_list)
+        response = self.detect_model.predict(roi_list)
         true_array = np.full(len(roi_pos_list), true_class)
         equal_array = np.equal(true_array, response)
         roi_array = np.asarray(roi_pos_list)
         shape = roi_array.shape
         roi_pos_array = np.asarray(roi_pos_list)
-        roi_array = np.compress(equal_array, roi_pos_list, axis=0)"""
+        roi_array = np.compress(equal_array, roi_pos_list, axis=0)
         return roi_array
         
 

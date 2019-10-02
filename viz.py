@@ -32,7 +32,7 @@ def _id_to_classname(masked_array):
 
 if __name__ == "__main__":
     #x, y = dataset.load_2_class('C:/Users/Alex/CodeProjects/bow-python/dataset', -1, 1)
-    train, test = dataset.load_data_json('C:/Users/Alex/CodeProjects/bow-python/dataset')
+    train, test = dataset.load_data_2('C:/Users/Alex/CodeProjects/bow-python/dataset_v2')
     #(train_x, train_y), (test_x, test_y) = dataset.filter_data(train, test, [-1, 1])
     train_x, train_y = train
     test_x, test_y = test

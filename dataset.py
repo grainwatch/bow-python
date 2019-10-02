@@ -46,6 +46,29 @@ def load_data_json(data_pathname) -> Tuple[Data, Data]:
         test_y += [label_to_id[label]] * len(label_test_x)
     return (train_x, train_y), (test_x, test_y)
 
+def load_data_2(data_pathname) -> Tuple[Data, Data]:
+    imgs = []
+    labels = []
+    data_path = Path(data_pathname)
+    train_path = data_path.joinpath('train')
+    test_path = data_path.joinpath('test')
+    assert train_path.exists() and test_path.exists()
+    train_imgs, train_labels = _read_imgs_from_classfolder(train_path)
+    test_imgs, test_labels = _read_imgs_from_classfolder(train_path)
+    return (train_imgs, train_labels), (test_imgs, test_labels)
+
+
+def _read_imgs_from_classfolder(classdata_path: Path):
+    imgs = []
+    labels = []
+    for trainclass_path in classdata_path.iterdir():
+        trainimg_pathlist = list(trainclass_path.iterdir())
+        classimgs = list(map(lambda imgpath: cv.imread(str(imgpath)), trainimg_pathlist))
+        classlabels = [label_to_id[trainclass_path.name]] * len(classimgs)
+        imgs += classimgs
+        labels += classlabels
+    return imgs, labels
+
 
 def _read_imgs(data_path, boundary):
     x = []
@@ -88,66 +111,6 @@ ENG_TO_GER = {'corn': 'mais', 'rye': 'roggen', 'triticale': 'triticale', 'wheat'
 class_dict = {'mehl': -1, 'mais': 1, 'roggen': 2, 'triticale': 3, 'weizen': 4}
 class_dict = {'mehl': -1, 'mais': 1, 'roggen': 2, 'triticale': 3, 'weizen': 4}
 
-def create_data(img_pathname: str, label_pathname: str, negative_foldername: str, dst_pathname: str='.', test_amount: float=0, scale: float=None, window_size: Tuple[int, int]=(100, 100)):
-        dst_path = Path(dst_pathname)
-        dst_path.mkdir(exist_ok=True)
-
-        missing_files_dict = {}
-        label_dict = {}
-        img_counter = 0
-        
-        for label_classdir in Path(label_pathname).iterdir():
-            img_classdir = Path(img_pathname).joinpath(ENG_TO_GER[label_classdir.name])
-            
-            if img_classdir.exists():
-                missing_label_counter = 0
-                missing_label_names = []
-                under_boundary = img_counter
-                for img_path in img_classdir.iterdir():
-                    i = img_path.name.index('.')
-                    file_id = img_path.name[0:i]
-                    label_path = label_classdir.joinpath(file_id + '.json')
-
-                    if label_path.exists():
-                        img = cv.imread(str(img_path))
-                        if scale is not None:
-                            img = cv.resize(img, (0, 0), None, scale, scale)
-                        labels = json.load(label_path.open())['shapes']
-                        
-                        for label in labels:
-                            points = label['points']
-                            x, y = calc_roi(points, window_size, scale, img.shape)
-                            item = img[y[0]:y[1], x[0]:x[1]]
-                            item_path = dst_path.joinpath(f'{img_counter}.jpg')
-                            cv.imwrite(str(item_path), item)
-                            img_counter +=1
-                    
-                    else:
-                        missing_label_counter += 1
-                        missing_label_names.append(img_path.name)
-                
-                upper_boundary = img_counter - 1
-                train_boundaries, test_boundaries = _calc_train_test_boundaries(under_boundary, upper_boundary, test_amount)
-                label_dict[label_classdir.name] = {'train_boundaries': train_boundaries, 'test_boundaries': test_boundaries}
-
-                missing_files_dict[label_classdir.name] = (missing_label_counter, missing_label_names)
-        print(missing_files_dict)
-        under_boundary, upper_boundary = _create_negative_examples(img_pathname, negative_foldername, dst_pathname, 400, scale, window_size, img_counter)
-        train_boundaries, test_boundaries = _calc_train_test_boundaries(under_boundary, upper_boundary, test_amount)
-        label_dict['negative'] = {'train_boundaries': train_boundaries, 'test_boundaries': test_boundaries}
-        with dst_path.joinpath('labels.json').open('w') as jsonfile:
-            json.dump(label_dict, jsonfile)
-
-def _calc_train_test_boundaries(under_boundary, upper_boundary, test_imgs_amount):
-    print(under_boundary, upper_boundary, test_imgs_amount)
-    total = upper_boundary - under_boundary
-    test_imgs_total = math.ceil(total*test_imgs_amount)
-    under_train_boundary = under_boundary
-    upper_train_boundary = upper_boundary - test_imgs_total
-    under_test_boundary = upper_train_boundary + 1
-    upper_test_boundary = upper_boundary
-    return (under_train_boundary, upper_train_boundary), (under_test_boundary, upper_test_boundary)
-
 def _create_negative_examples(img_pathname: str, negative_foldername: str, dst_pathname: str, amount: int, scale: float, window_size: Tuple[int, int], img_counter):
     under_boundary = img_counter
     dst_path = Path(dst_pathname)
@@ -178,7 +141,7 @@ def _create_negative_examples(img_pathname: str, negative_foldername: str, dst_p
 
 ### VERSION 2 ###
 
-def create_data_2(img_pathname: str, label_pathname: str, negative_foldername: str, dst_pathname: str='.', test_amount: float=0, scale: float=1.0, window_size: Tuple[int, int]=(100, 100)):
+def create_data_2(img_pathname: str, label_pathname: str, dst_pathname: str='.', test_amount: float=0, scale: float=1.0, window_size: Tuple[int, int]=(100, 100)):
     dst_path = Path(dst_pathname)
     dst_path.mkdir(exist_ok=True)
     train_path = dst_path.joinpath('train')
@@ -187,7 +150,37 @@ def create_data_2(img_pathname: str, label_pathname: str, negative_foldername: s
     test_path.mkdir(exist_ok=True)
     negative_samples = []
     for label_classdir in Path(label_pathname).iterdir():
-        img_classdir = Path(img_pathname).joinpath(ENG_TO_GER[label_classdir.name])
+        img_classdir = Path(img_pathname).joinpath(label_classdir.name)
+        if img_classdir.exists():
+            samples = _create_class_samples(img_classdir, label_classdir, scale, window_size)
+            negative_samples += _create_negative_samples_from_class(img_classdir, label_classdir, scale, window_size)
+            train_samples, test_samples = _split_samples(samples, test_amount)
+            class_train_path = train_path.joinpath(label_classdir.name)
+            class_train_path.mkdir(exist_ok=True)
+            class_test_path = test_path.joinpath(label_classdir.name)
+            class_test_path.mkdir(exist_ok=True)
+            _write_samples(train_samples, class_train_path)
+            _write_samples(test_samples, class_test_path)
+    negativetrain_path = train_path.joinpath('negative')
+    negativetrain_path.mkdir(exist_ok=True)
+    negativetest_path = test_path.joinpath('negative')
+    negativetest_path.mkdir(exist_ok=True)
+    negativetrain_samples, negativetest_samples = _split_samples(negative_samples, test_amount)
+    _write_samples(negativetrain_samples, negativetrain_path)
+    _write_samples(negativetest_samples, negativetest_path)
+
+def create_data_from_classes(imgfolder_pathname: str, labelfolder_pathname: str, dst_pathname: str, class_list: List[str], test_amount: float=0, scale: float=1.0, window_size: Tuple[int, int]=(128, 128)):
+    dst_path = Path(dst_pathname)
+    dst_path.mkdir(exist_ok=True)
+    train_path = dst_path.joinpath('train')
+    test_path = dst_path.joinpath('test')
+    train_path.mkdir(exist_ok=True)
+    test_path.mkdir(exist_ok=True)
+    labelpaths = list(Path(labelfolder_pathname).iterdir())
+    labelpaths = list(filter(lambda path: path.name in class_list, labelpaths))
+    negative_samples = []
+    for label_classdir in labelpaths:
+        img_classdir = Path(imgfolder_pathname).joinpath(label_classdir.name)
         if img_classdir.exists():
             samples = _create_class_samples(img_classdir, label_classdir, scale, window_size)
             negative_samples += _create_negative_samples_from_class(img_classdir, label_classdir, scale, window_size)
@@ -223,12 +216,13 @@ def _split_samples(samples: List[np.ndarray], test_amount: float) -> Tuple[List[
 
 def _create_class_samples(classimg_path: Path, labelfolder_path: Path, scale: float, window_size: Tuple[int, int]) -> List[np.ndarray]:
     samples = []
-    window_dict = _load_labels_from_path(list(labelfolder_path.glob('*.json')), window_size)
+    window_dict = _load_labels_from_path(list(labelfolder_path.glob('*.json')), window_size, True)
     imgpaths = list(classimg_path.iterdir())
     imgpaths = list(filter(lambda imgpath: _name_from_path(imgpath) in window_dict, imgpaths))
     labels = list(map(lambda imgpath: window_dict[_name_from_path(imgpath)], imgpaths))
     imgs = _load_imgs_from_path(imgpaths, scale)
     for img, label in zip(imgs, labels):
+        label = list(map(lambda roi: _move_window_into_img(roi, img.shape), label))
         samples += _samples_from_img(img, label)
     return samples
 
@@ -238,7 +232,7 @@ def _create_negative_samples_from_class(classimg_path: Path, labelfolder_path: P
     roi_dict = _load_labels_from_path(labelpaths)
     imgpaths = list(classimg_path.glob('*.jpg'))
     imgpaths = list(filter(lambda imgpath: _name_from_path(imgpath) in roi_dict, imgpaths))
-    labels = list(map(lambda imgpath: roi_dict[_name_from_path(imgpath)], imgpaths))
+    labels = map(lambda imgpath: roi_dict[_name_from_path(imgpath)], imgpaths)
     imgs = _load_imgs_from_path(imgpaths, scale)
     for img, label in zip(imgs, labels):
         samples += _negative_samples_from_img(img, label)
@@ -247,16 +241,29 @@ def _create_negative_samples_from_class(classimg_path: Path, labelfolder_path: P
     
 Rectangle = Tuple[int, int, int, int]
 
-def _load_labels_from_path(labelpaths: List[Path], window_size: Tuple[int, int]=None) -> Dict[str, List[Rectangle]]:
+def _load_labels_from_path(labelpaths: List[Path], window_size: Tuple[int, int]=None, ignore_none: bool=False) -> Dict[str, List[Rectangle]]:
     window_dict = {}
     for labelpath in labelpaths:
         labelname = _name_from_path(labelpath)
-        rois = _rois_from_json(labelpath)
+        rois = _rois_from_json(labelpath, ignore_none)
         rois = map(lambda roi: _scale_rectangle(roi, scale), rois)
         if window_size is not None:
             rois = map(lambda roi: _rectangle_to_window(roi, window_size), rois)
         window_dict[labelname] = list(rois)
     return window_dict
+
+def _move_window_into_img(roi: Rectangle, img_shape: Tuple[int, int]):
+    x, y, width, height = roi
+    img_width, img_height = img_shape[1], img_shape[0]
+    if x < 0:
+        x = 0
+    elif x + width > img_width:
+        x = img_width - width
+    if y < 0:
+        y = 0
+    elif y + height > img_height:
+        y = img_height - height
+    return x, y, width, height
 
 #TESTED
 def _name_from_path(path: Path) -> str:
@@ -277,24 +284,19 @@ def _samples_from_img(img: np.ndarray, rois: List[Rectangle]) -> List[np.ndarray
         samples.append(roi_img)
     return samples
 
-def _negative_samples_from_img(img: np.ndarray, rois: List[Rectangle]=None, window_size: Tuple[int, int]=(128, 128), stride: Tuple[int, int]=(64, 64)):
+def _negative_samples_from_img(img: np.ndarray, rois: List[Rectangle]=None, window_size: Tuple[int, int]=(128, 128), stride: Tuple[int, int]=(192, 192)):
     roi_img_list = []
     width, height = window_size
     stride_x, stride_y = stride
     x, y = 0, 0
-    visual = img
     while y + height < img.shape[0]:
         if x + width > img.shape[1]:
             x = 0
             y += stride_y
             continue #skip loop iteration to check y condition
-        roi_img = img[y:y+height, x:x+width]
-        print(f'roi: {x, y}')
-        if not is_roi_colliding((x, y, width, height), rois, img):
-            print('not colliding')
+        if not is_roi_colliding((x, y, width, height), rois):
+            roi_img = img[y:y+height, x:x+width]
             roi_img_list.append(roi_img)
-        else:
-            print('colliding')
         x += stride_x
     return roi_img_list
 
@@ -319,7 +321,7 @@ def is_roi_colliding(roi_to_check: Rectangle, rois: List[Rectangle], img: np.nda
     return False
 
 #TESTED
-def _rois_from_json(jsonpath: Path):
+def _rois_from_json(jsonpath: Path, ignore_none: bool=False):
     rois = []
     with jsonpath.open() as jsonfile:
         labeljson_dict = json.load(jsonfile)
@@ -327,7 +329,11 @@ def _rois_from_json(jsonpath: Path):
         for roi_label in labels:
             points = roi_label['points']
             rectangle = _rectangle_from_points(points)
-            rois.append(rectangle)
+            if ignore_none:
+                if roi_label['label'] != 'None':
+                    rois.append(rectangle)
+            else:
+                rois.append(rectangle)
     return rois
 
 #TESTED
@@ -455,7 +461,7 @@ if __name__ == '__main__':
     size = get_biggest_label('C:/Users/Alex/IdeaProjects/grain-swpt/dataset')
     scale = 128 / size
     print(scale)
-    create_data_2('C:/Users/Alex/Desktop/Bilder_Korner_original_20180411', 'C:/Users/Alex/IdeaProjects/grain-swpt/dataset', 'mehl', 'dataset_v2', 0.2, scale, (128, 128))
+    create_data_from_classes('C:/Users/Alex/Desktop/Bilder_Korner_original_20180411', 'C:/Users/Alex/IdeaProjects/grain-swpt/dataset2', 'dataset_v2', ['corn'], 0.2, scale, (128, 128))
     """(train_x, train_y), (test_x, test_y) = load_data_json('dataset')
     print(train_x, train_y, test_x, test_y)"""
     #x, y = load_data('./dataset')

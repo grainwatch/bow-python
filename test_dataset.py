@@ -167,6 +167,20 @@ class TestDataset(unittest.TestCase):
         expected = 'test'
         self.assertEqual(expected, result)
 
+    def test_move_into_img_1(self):
+        roi = (-5, -10, 128, 128)
+        img_shape = (1000, 500)
+        result = dataset._move_window_into_img(roi, img_shape)
+        expected = (0, 0, 128, 128)
+        self.assertTupleEqual(expected, result)
+
+    def test_move_into_img_2(self):
+        roi = (1000, 500, 128, 128)
+        img_shape = (500, 1000)
+        result = dataset._move_window_into_img(roi, img_shape)
+        expected = (872, 372, 128, 128)
+        self.assertTupleEqual(expected, result)
+
     def test_negative_samples_from_imgs(self):
         jsonpath = Path('C:\\Users\\Alex\\CodeProjects\\bow-python\\test\\dataset\\DSC_0922.json')
         rois = dataset._rois_from_json(jsonpath)
