@@ -314,5 +314,4 @@ def _rect_to_roi(rect, img):
     return roi
 
 def _get_false_positive(expected_list, result_list):
-
-
+    pass
