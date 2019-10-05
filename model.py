@@ -3,6 +3,7 @@ import numpy as np
 import dataset
 import random
 from collections import Counter
+import rectangle
 
 class BOWModel:
     def __init__(self, clusters=150):
@@ -215,6 +216,75 @@ class ObjectDetector:
         roi_array = np.compress(equal_array, roi_pos_list, axis=0)
         return roi_array
         
+class SelectiveSearchDetector:
+    def __init__(self, model, low, high):
+        self.model = model
+        self.sel_search = cv.ximgproc.segmentation.createSelectiveSearchSegmentation()
+        multi_strategy = cv.ximgproc.segmentation.createSelectiveSearchSegmentationStrategyMultiple()
+        self.sel_search.addStrategy(multi_strategy)
+        self.low = low
+        self.high = high
+
+    def fit(self, imgs, rects_per_img , labels_per_img):
+        truth_rois, truth_labels = self._get_ground_truth_rois(imgs, rects_per_img, labels_per_img)
+        for img in imgs:
+            self.sel_search.addImage(img)
+        sel_rects = self.sel_search.procces()
+        self.sel_search.clearImages()
+        negative_roi, negative_labels = self._get_difficult_negatives(imgs, rects_per_img, sel_rects)
+        self.model.fit(truth_rois + negative_roi, truth_labels + negative_labels)
+        hard_negatives = []
+        for _ in range(2):
+            hard_negatives_iter = self._mine_hard_negatives(imgs, )
+            hard_negatives += hard_negatives_iter
+            self.model.fit(truth_rois + negative_roi + hard_negatives, truth_labels + negative_labels)
+
+    def _get_ground_truth_rois(self, imgs, rects_per_img, labels_per_img):
+        rois = []
+        labels = []
+        for img, rects, labels_img in zip(imgs, rects_per_img, labels_per_img):
+            img_rois = list(map(lambda rect: _rect_to_roi(rect, img), rects))
+            rois += img_rois
+            labels += labels_img
+        return rois, labels
+
+    def _get_difficult_negatives(self, imgs, rects_labeled_per_img, rects_searched_per_img):
+        negatives = []
+        for img, rects_labeled, rects_searched in zip(imgs, rects_labeled_per_img, rects_searched_per_img):
+            for rect_labeled in rects_labeled:
+                for rect_searched in rects_searched:
+                    if rectangle.in_iou_range(rect_labeled, rect_searched, self.low, self.high):
+                        negatives = _rect_to_roi(rect_searched, img)
+        labels = [-1] * len(negatives)
+        return negatives, labels
+
+    #70% overlap
+    def _is_near_duplicate(self):
+        pass
+
+    def _mine_hard_negatives(self, imgs, rects_labeled_per_img, labels_per_img, rects_searched_per_img):
+        false_positive_rois = []
+        for img, rects_labeled, rects_searched in zip(imgs, rects_labeled_per_img, rects_searched_per_img):
+            rois_searched = list(map(lambda rect: _rect_to_roi(rect, img)))
+            response_searched = self.model.predict(rois_searched)
+            b_boxes_searched = list(zip(rois_searched, rects_searched, response_searched))
+            positive_b_boxes_searched = list(filter(lambda b_box: b_box[0] != -1, b_boxes_searched))
+            false_positive_rois_img = []
+            for rect_labeled in rects_labeled:
+                for positive_roi_searched, positive_rect_searched, _ in positive_b_boxes_searched:
+                    if rectangle.get_iou(rect_labeled, positive_roi_searched) == 0:
+                        false_positive_rois.append(positive_roi_searched)
+            false_positive_rois += false_positive_rois_img
+        return false_positive_rois
+
+    def predict(self, img):
+        self.sel_search.addImage()
+        rects = self.sel_search.process()
+        self.sel_search.clearImages()
+        rois = list(map(lambda rect: _rect_to_roi(rect, img), rects))
+        labels = self.model.predict(rois)
+        return labels, rois
+
 
 
 class ColourDBScan:
@@ -239,5 +309,10 @@ def _filter_by_index_list(array, indices):
     for i in indices:
         array[i]
 
+def _rect_to_roi(rect, img):
+    roi = img[rect.y:rect.y+rect.height, rect.x:rect.x+rect.width]
+    return roi
+
+def _get_false_positive(expected_list, result_list):
 
 
