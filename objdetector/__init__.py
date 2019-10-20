@@ -1,0 +1,10 @@
+import objdetector.slidingwindow
+import objdetector.selectivesearch
+import objdetector.colordbscan
+import util.rectangle
+
+SlidingWindowDetector = objdetector.slidingwindow.SlidingWindowDetector
+SelectiveSearchDetector = objdetector.selectivesearch.SelectiveSearchDetector
+ColorDBScan = objdetector.colordbscan.ColorDBScan
+MultiClassColorDBScan = objdetector.colordbscan.MultiClassColorDBScan
+

@@ -1,12 +1,14 @@
 import cv2 as cv
 import numpy as np
+import dataclasses
 from sklearn import decomposition
 import matplotlib.pyplot as plt
 from matplotlib import cm
 from mpl_toolkits.mplot3d import Axes3D
 from typing import List
+from util.rectangle import Rect
 import dataset
-import model
+import models
 
 
 id_to_classname_dict = {-1: 'Mehl', 1: 'Mais', 2: 'Roggen', 3: 'Triticale', 4: 'Weizen'}
@@ -23,6 +25,17 @@ def visualize(x, y):
     ax.legend(handles, labels, title="Klassen")
     plt.show()
 
+def viz_detected_objects(img: np.ndarray, true_rects: List[Rect], true_labels, detected_rects: List[Rect], detected_labels):
+    for rect, label in zip(true_rects, true_labels):
+        img = cv.rectangle(img, dataclasses.astuple(rect), (0, 255, 0), 3)
+        img = cv.putText(img, f'{label}', (rect.x, rect.y), cv.FONT_HERSHEY_SIMPLEX, 2, (0, 255, 0), 3)
+    for rect, label in zip(detected_rects, detected_labels):
+        img = cv.rectangle(img, dataclasses.astuple(rect), (0, 0, 255), 3)
+        img = cv.putText(img, f'{label}', (rect.x, rect.y), cv.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 255), 3)
+    img = cv.resize(img, (0, 0), None, 0.5, 0.5)
+    cv.imshow('', img)
+    cv.waitKey(0)
+
 def _id_to_classname(masked_array):
     id_list = masked_array.astype(np.int).tolist()
     classname_list = list(map(lambda x: id_to_classname_dict[x], id_list))
@@ -37,9 +50,9 @@ if __name__ == "__main__":
     train_x, train_y = train
     test_x, test_y = test
     train_x, train_y = dataset.shuffle(train_x, train_y)
-    """bow = model.BOWModel(150)
+    bow = models.BOWModel(150)
     bow.fit(train_x, train_y)
-    visualize(bow.x_histogram, train_y)"""
-    hog = model.HOG()
+    visualize(bow.x_histogram, train_y)
+    """hog = models.HOG()
     hog.fit(train_x, train_y)
-    visualize(hog.x_des, train_y)
+    visualize(hog.x_des, train_y)"""
